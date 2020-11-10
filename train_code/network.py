@@ -92,7 +92,8 @@ def unet_generator(inputs, channel=32, num_blocks=4, name='generator', reuse=Fal
         x4 = tf.nn.leaky_relu(x4)
         x4 = slim.convolution2d(x4, 3, [7, 7], activation_fn=None)
         #x4 = tf.clip_by_value(x4, -1, 1)
-        return x4
+        
+        return tf.tanh(x4)
 
 
 def disc_bn(x, scale=1, channel=32, is_training=True,

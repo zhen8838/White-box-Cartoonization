@@ -17,17 +17,17 @@ import network
 from tqdm import tqdm
 
 
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+# os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--patch_size", default = 256, type = int)
-    parser.add_argument("--batch_size", default = 4, type = int)     
-    parser.add_argument("--total_iter", default = 50000, type = int)
+    parser.add_argument("--batch_size", default = 16, type = int)     
+    parser.add_argument("--total_iter", default = 1000, type = int)
     parser.add_argument("--adv_train_lr", default = 2e-4, type = float)
     parser.add_argument("--gpu_fraction", default = 0.5, type = float)
-    parser.add_argument("--save_dir", default = 'pretrain')
+    parser.add_argument("--save_dir", default = 'train_cartoon')
 
     args = parser.parse_args()
     
@@ -67,9 +67,9 @@ def train(args):
     with tf.device('/device:GPU:0'):
 
         sess.run(tf.global_variables_initializer())
-        face_photo_dir = 'dataset/photo_face'
+        face_photo_dir = '../dataset/photo_face'
         face_photo_list = utils.load_image_list(face_photo_dir)
-        scenery_photo_dir = 'dataset/photo_scenery'
+        scenery_photo_dir = '../dataset/photo_scenery'
         scenery_photo_list = utils.load_image_list(scenery_photo_dir)
 
 
@@ -86,7 +86,7 @@ def train(args):
 
                 print('pretrain, iter: {}, recon_loss: {}'.format(total_iter, r_loss))
                 if np.mod(total_iter+1, 500 ) == 0:
-                    saver.save(sess, args.save_dir+'save_models/model', 
+                    saver.save(sess, args.save_dir+'/saved_models/model', 
                                write_meta_graph=False, global_step=total_iter)
                      
                     photo_face = utils.next_batch(face_photo_list, args.batch_size)

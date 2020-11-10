@@ -24,12 +24,12 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--patch_size", default=256, type=int)
-    parser.add_argument("--batch_size", default=4, type=int)
-    parser.add_argument("--total_iter", default=100000, type=int)
+    parser.add_argument("--batch_size", default=16, type=int)
+    parser.add_argument("--total_iter", default=50000, type=int)
     parser.add_argument("--adv_train_lr", default=2e-4, type=float)
     parser.add_argument("--gpu_fraction", default=0.5, type=float)
     parser.add_argument("--save_dir", default='train_cartoon', type=str)
-    parser.add_argument("--use_enhance", default=False)
+    parser.add_argument("--use_enhance", default=True)
 
     args = parser.parse_args()
 
@@ -67,29 +67,29 @@ def train(args):
     photo_loss = tf.reduce_mean(tf.losses.absolute_difference(vgg_photo, vgg_output)) / (h * w * c)
     superpixel_loss = tf.reduce_mean(tf.losses.absolute_difference
                                      (vgg_superpixel, vgg_output)) / (h * w * c)
-    recon_loss = photo_loss + superpixel_loss
+    # recon_loss = photo_loss + superpixel_loss
     tv_loss = loss.total_variation_loss(output)
 
     tv_loss = 1e4 * tv_loss
     g_loss_blur = 1e-1 * g_loss_blur
-    recon_loss = 2e2 * recon_loss
-    g_loss_total = tv_loss + g_loss_blur + g_loss_gray + recon_loss
+    photo_loss = 2e2 * photo_loss
+    superpixel_loss = 2e2 * superpixel_loss
+    g_loss_total = tv_loss + g_loss_blur + g_loss_gray + photo_loss + superpixel_loss
     d_loss_total = d_loss_blur + d_loss_gray
 
     all_vars = tf.trainable_variables()
     gene_vars = [var for var in all_vars if 'gene' in var.name]
     disc_vars = [var for var in all_vars if 'disc' in var.name]
 
-    tf.summary.scalar('tv_loss', tv_loss)
-    tf.summary.scalar('photo_loss', photo_loss)
-    tf.summary.scalar('superpixel_loss', superpixel_loss)
-    tf.summary.scalar('recon_loss', recon_loss)
-    tf.summary.scalar('d_loss_gray', d_loss_gray)
-    tf.summary.scalar('g_loss_gray', g_loss_gray)
-    tf.summary.scalar('d_loss_blur', d_loss_blur)
-    tf.summary.scalar('g_loss_blur', g_loss_blur)
-    tf.summary.scalar('d_loss_total', d_loss_total)
-    tf.summary.scalar('g_loss_total', g_loss_total)
+    tf.summary.scalar('gen/tv_loss', tv_loss)
+    tf.summary.scalar('gen/photo_loss', photo_loss)
+    tf.summary.scalar('gen/superpixel_loss', superpixel_loss)
+    tf.summary.scalar('gen/g_blur', g_loss_blur)
+    tf.summary.scalar('gen/g_gray', g_loss_gray)
+    tf.summary.scalar('gen/g_loss', g_loss_total)
+    tf.summary.scalar('dis/d_loss', d_loss_total)
+    tf.summary.scalar('dis/d_gray', d_loss_gray)
+    tf.summary.scalar('dis/d_blur', d_loss_blur)
 
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops):
@@ -115,7 +115,7 @@ def train(args):
     with tf.device('/device:GPU:0'):
 
         sess.run(tf.global_variables_initializer())
-        # saver.restore(sess, tf.train.latest_checkpoint('../test_code/saved_models'))
+        saver.restore(sess, tf.train.latest_checkpoint(args.save_dir + '/saved_models'))
 
         face_photo_dir = '../dataset/photo_face'
         face_photo_list = utils.load_image_list(face_photo_dir)
@@ -152,11 +152,11 @@ def train(args):
             else:
                 superpixel_batch = utils.simple_superpixel(inter_out, seg_num=200)
 
-            _, g_loss, r_loss = sess.run([g_optim, g_loss_total, recon_loss],
-                                         feed_dict={input_photo: photo_batch,
-                                                    input_superpixel: superpixel_batch,
-                                                    input_cartoon: cartoon_batch})
-
+            _, g_loss, s_loss, p_loss = sess.run([g_optim, g_loss_total, superpixel_loss, photo_loss],
+                                                 feed_dict={input_photo: photo_batch,
+                                                            input_superpixel: superpixel_batch,
+                                                            input_cartoon: cartoon_batch})
+            r_loss= s_loss+ p_loss # recon loss = superpixel_loss + photo_loss
             _, d_loss, train_info = sess.run([d_optim, d_loss_total, summary_op],
                                              feed_dict={input_photo: photo_batch,
                                                         input_superpixel: superpixel_batch,
