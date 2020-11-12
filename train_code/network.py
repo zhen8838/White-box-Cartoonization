@@ -57,7 +57,7 @@ def generator(inputs, channel=32, num_blocks=4, name='generator', reuse=False):
         return x
 
 
-def unet_generator(inputs, channel=32, num_blocks=4, name='generator', reuse=False):
+def unet_generator(inputs, channel=32, num_blocks=4, name='generator', reuse=False, use_enhance=False):
     with tf.variable_scope(name, reuse=reuse):
 
         x0 = slim.convolution2d(inputs, channel, [7, 7], activation_fn=None)
@@ -91,9 +91,11 @@ def unet_generator(inputs, channel=32, num_blocks=4, name='generator', reuse=Fal
         x4 = slim.convolution2d(x4 + x0, channel, [3, 3], activation_fn=None)
         x4 = tf.nn.leaky_relu(x4)
         x4 = slim.convolution2d(x4, 3, [7, 7], activation_fn=None)
-        #x4 = tf.clip_by_value(x4, -1, 1)
-        
-        return tf.tanh(x4)
+        if use_enhance:
+            x4 = tf.clip_by_value(x4, -1, 1)
+        else:
+            x4 = tf.tanh(x4)
+        return x4
 
 
 def disc_bn(x, scale=1, channel=32, is_training=True,

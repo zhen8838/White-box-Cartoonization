@@ -25,11 +25,12 @@ def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--patch_size", default=256, type=int)
     parser.add_argument("--batch_size", default=16, type=int)
-    parser.add_argument("--total_iter", default=50000, type=int)
+    parser.add_argument("--total_iter", default=34000, type=int)
     parser.add_argument("--adv_train_lr", default=2e-4, type=float)
     parser.add_argument("--gpu_fraction", default=0.5, type=float)
     parser.add_argument("--save_dir", default='train_cartoon', type=str)
     parser.add_argument("--use_enhance", default=True)
+    parser.add_argument("--power", default=1., type=float) # power == 1， equal to no power..
 
     args = parser.parse_args()
 
@@ -45,7 +46,7 @@ def train(args):
     input_cartoon = tf.placeholder(tf.float32, [args.batch_size,
                                                 args.patch_size, args.patch_size, 3])
 
-    output = network.unet_generator(input_photo)
+    output = network.unet_generator(input_photo, use_enhance=args.use_enhance)
     output = guided_filter(input_photo, output, r=1)
 
     blur_fake = guided_filter(output, output, r=5, eps=2e-1)
@@ -115,7 +116,9 @@ def train(args):
     with tf.device('/device:GPU:0'):
 
         sess.run(tf.global_variables_initializer())
-        saver.restore(sess, tf.train.latest_checkpoint(args.save_dir + '/saved_models'))
+        latest_checkpoint = tf.train.latest_checkpoint(args.save_dir + '/saved_models')
+        print("reload from", latest_checkpoint)
+        saver.restore(sess, latest_checkpoint)
 
         face_photo_dir = '../dataset/photo_face'
         face_photo_list = utils.load_image_list(face_photo_dir)
@@ -127,7 +130,7 @@ def train(args):
         scenery_cartoon_dir = '../dataset/cartoon_scenery'
         scenery_cartoon_list = utils.load_image_list(scenery_cartoon_dir)
 
-        for total_iter in tqdm(range(args.total_iter)):
+        for total_iter in tqdm(range(1000, 1000 + args.total_iter)):
 
             if np.mod(total_iter, 5) == 0:
                 photo_batch = utils.next_batch(face_photo_list, args.batch_size)
@@ -148,7 +151,7 @@ def train(args):
             If this works, then try to use adaptive color with clip_by_value.
             '''
             if args.use_enhance:
-                superpixel_batch = utils.selective_adacolor(inter_out, power=1.2)
+                superpixel_batch = utils.selective_adacolor(inter_out, power=args.power)
             else:
                 superpixel_batch = utils.simple_superpixel(inter_out, seg_num=200)
 
@@ -156,7 +159,7 @@ def train(args):
                                                  feed_dict={input_photo: photo_batch,
                                                             input_superpixel: superpixel_batch,
                                                             input_cartoon: cartoon_batch})
-            r_loss= s_loss+ p_loss # recon loss = superpixel_loss + photo_loss
+            r_loss = s_loss + p_loss  # recon loss = superpixel_loss + photo_loss
             _, d_loss, train_info = sess.run([d_optim, d_loss_total, summary_op],
                                              feed_dict={input_photo: photo_batch,
                                                         input_superpixel: superpixel_batch,
